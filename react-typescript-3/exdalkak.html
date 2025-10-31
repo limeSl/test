@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solar System Explorer - 3D 우주 탐험</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: radial-gradient(ellipse at center, #1a1a2e 0%, #16213e 50%, #0f0f23 100%);
+            overflow: hidden;
+            color: white;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #canvas {
+            display: block;
+            cursor: grab;
+        }
+
+        #canvas:active {
+            cursor: grabbing;
+        }
+
+        .ui-panel {
+            position: absolute;
+            background: rgba(0, 20, 40, 0.9);
+            border: 1px solid rgba(100, 200, 255, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        #controlPanel {
+            top: 20px;
+            left: 20px;
+            width: 280px;
+        }
+
+        #infoPanel {
+            top: 20px;
+            right: 20px;
+            width: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        #educationPanel {
+            bottom: 20px;
+            left: 20px;
+            width: 350px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #87ceeb;
+            font-size: 14px;
+        }
+
+        .slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #333;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #4CAF50;
+            cursor: pointer;
+        }
+
+        .button {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+        }
+
+        .planet-info {
+            margin-bottom: 10px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+
+        .planet-name {
+            font-weight: bold;
+            color: #87ceeb;
+            margin-bottom: 5px;
+        }
+
+        .distance-info {
+            font-size: 12px;
+            color: #ccc;
+        }
+
+        #stars {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .educational-content {
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .physics-fact {
+            background: rgba(255, 215, 0, 0.1);
+            border-left: 3px solid #ffd700;
+            padding: 8px;
+            margin: 8px 0;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="stars"></canvas>
+        <canvas id="canvas"></canvas>
+        
+        <div id="controlPanel" class="ui-panel">
+            <h3 style="color: #87ceeb; margin-bottom: 15px;">🚀 탐험 컨트롤</h3>
+            
+            <div class="control-group">
+                <label>시간 속도</label>
+                <input type="range" id="timeSpeed" class="slider" min="0" max="10" value="1" step="0.1">
+                <span id="timeSpeedValue">1x</span>
+            </div>
+            
+            <div class="control-group">
+                <label>줌 레벨</label>
+                <input type="range" id="zoomLevel" class="slider" min="0.1" max="3" value="1" step="0.1">
+                <span id="zoomValue">1x</span>
+            </div>
+            
+            <div class="control-group">
+                <button class="button" onclick="focusOnPlanet('earth')">🌍 지구</button>
+                <button class="button" onclick="focusOnPlanet('moon')">🌙 달</button>
+                <button class="button" onclick="focusOnPlanet('mars')">🔴 화성</button>
+            </div>
+            
+            <div class="control-group">
+                <button class="button" onclick="toggleOrbits()">궤도 표시</button>
+                <button class="button" onclick="togglePhysics()">물리학 모드</button>
+            </div>
+        </div>
+
+        <div id="infoPanel" class="ui-panel">
+            <h3 style="color: #87ceeb; margin-bottom: 15px;">📊 천체 정보</h3>
+            <div id="planetInfo"></div>
+        </div>
+
+        <div id="educationPanel" class="ui-panel">
+            <h3 style="color: #87ceeb; margin-bottom: 15px;">🎓 교육 정보</h3>
+            <div id="educationContent" class="educational-content">
+                <div class="physics-fact">
+                    <strong>궤도 역학:</strong> 천체들은 중력에 의해 타원 궤도를 그리며 움직입니다.
+                </div>
+                <p>마우스로 드래그하여 시점을 회전하고, 휠로 줌을 조절하세요!</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 캔버스 설정
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const starsCanvas = document.getElementById('stars');
+        const starsCtx = starsCanvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            starsCanvas.width = window.innerWidth;
+            starsCanvas.height = window.innerHeight;
+            drawStars();
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // 별 배경 생성
+        function drawStars() {
+            starsCtx.fillStyle = 'white';
+            for (let i = 0; i < 200; i++) {
+                const x = Math.random() * starsCanvas.width;
+                const y = Math.random() * starsCanvas.height;
+                const size = Math.random() * 2;
+                starsCtx.beginPath();
+                starsCtx.arc(x, y, size, 0, Math.PI * 2);
+                starsCtx.fill();
+            }
+        }
+
+        // 게임 상태
+        let camera = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            rotation: 0,
+            zoom: 1
+        };
+
+        let timeSpeed = 1;
+        let showOrbits = true;
+        let physicsMode = false;
+        let time = 0;
+
+        // 천체 데이터
+        const celestialBodies = {
+            earth: {
+                name: '지구',
+                x: 0,
+                y: 0,
+                radius: 20,
+                color: '#4A90E2',
+                orbitRadius: 0,
+                orbitSpeed: 0,
+                mass: 5.972e24,
+                realRadius: 6371,
+                description: '우리가 살고 있는 행성'
+            },
+            moon: {
+                name: '달',
+                x: 0,
+                y: 0,
+                radius: 8,
+                color: '#C0C0C0',
+                orbitRadius: 80,
+                orbitSpeed: 0.05,
+                mass: 7.342e22,
+                realRadius: 1737,
+                description: '지구의 자연 위성'
+            },
+            mars: {
+                name: '화성',
+                x: 0,
+                y: 0,
+                radius: 15,
+                color: '#CD5C5C',
+                orbitRadius: 200,
+                orbitSpeed: 0.02,
+                mass: 6.39e23,
+                realRadius: 3390,
+                description: '붉은 행성으로 불리는 4번째 행성'
+            }
+        };
+
+        // 마우스 컨트롤
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const deltaX = e.clientX - lastMouseX;
+                const deltaY = e.clientY - lastMouseY;
+                
+                camera.x += deltaX;
+                camera.y += deltaY;
+                
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            camera.zoom = Math.max(0.1, Math.min(3, camera.zoom * zoomFactor));
+            document.getElementById('zoomLevel').value = camera.zoom;
+            document.getElementById('zoomValue').textContent = camera.zoom.toFixed(1) + 'x';
+        });
+
+        // UI 컨트롤
+        document.getElementById('timeSpeed').addEventListener('input', (e) => {
+            timeSpeed = parseFloat(e.target.value);
+            document.getElementById('timeSpeedValue').textContent = timeSpeed.toFixed(1) + 'x';
+        });
+
+        document.getElementById('zoomLevel').addEventListener('input', (e) => {
+            camera.zoom = parseFloat(e.target.value);
+            document.getElementById('zoomValue').textContent = camera.zoom.toFixed(1) + 'x';
+        });
+
+        function focusOnPlanet(planetKey) {
+            const planet = celestialBodies[planetKey];
+            camera.x = canvas.width / 2 - planet.x * camera.zoom;
+            camera.y = canvas.height / 2 - planet.y * camera.zoom;
+            
+            updateEducationContent(planetKey);
+        }
+
+        function toggleOrbits() {
+            showOrbits = !showOrbits;
+        }
+
+        function togglePhysics() {
+            physicsMode = !physicsMode;
+            updateEducationContent(physicsMode ? 'physics' : 'general');
+        }
+
+        function updateEducationContent(topic) {
+            const content = document.getElementById('educationContent');
+            
+            const educationData = {
+                earth: `
+                    <div class="physics-fact">
+                        <strong>지구:</strong> 지름 12,742km, 질량 5.97×10²⁴kg
+                    </div>
+                    <p>지구는 태양으로부터 약 1억 5천만km 떨어져 있으며, 하루에 한 번 자전합니다.</p>
+                    <p><strong>중력:</strong> 9.8m/s² - 모든 물체를 지구 중심으로 끌어당깁니다.</p>
+                `,
+                moon: `
+                    <div class="physics-fact">
+                        <strong>달:</strong> 지름 3,474km, 지구로부터 384,400km
+                    </div>
+                    <p>달은 지구 주위를 27.3일에 한 번 공전하며, 조석 현상의 주요 원인입니다.</p>
+                    <p><strong>궤도 속도:</strong> 약 1km/s로 지구 주위를 돕니다.</p>
+                `,
+                mars: `
+                    <div class="physics-fact">
+                        <strong>화성:</strong> 지름 6,779km, 지구로부터 5,460만~4억km
+                    </div>
+                    <p>화성은 687일에 한 번 태양을 공전하며, 하루는 지구와 비슷한 24시간 37분입니다.</p>
+                    <p><strong>중력:</strong> 지구의 38% (3.7m/s²)</p>
+                `,
+                physics: `
+                    <div class="physics-fact">
+                        <strong>케플러 법칙:</strong> 행성의 궤도는 타원형이며, 태양에 가까울수록 빨라집니다.
+                    </div>
+                    <p><strong>만유인력:</strong> F = G(m₁m₂)/r² - 질량이 클수록, 거리가 가까울수록 강한 중력</p>
+                    <p><strong>원심력:</strong> 궤도 운동하는 천체가 직선으로 날아가지 않게 하는 힘</p>
+                `,
+                general: `
+                    <div class="physics-fact">
+                        <strong>궤도 역학:</strong> 천체들은 중력에 의해 타원 궤도를 그리며 움직입니다.
+                    </div>
+                    <p>마우스로 드래그하여 시점을 회전하고, 휠로 줌을 조절하세요!</p>
+                `
+            };
+            
+            content.innerHTML = educationData[topic] || educationData.general;
+        }
+
+        function updatePlanetInfo() {
+            const infoDiv = document.getElementById('planetInfo');
+            let html = '';
+            
+            Object.entries(celestialBodies).forEach(([key, body]) => {
+                const earthDistance = key === 'earth' ? 0 : 
+                    Math.sqrt((body.x - celestialBodies.earth.x) ** 2 + (body.y - celestialBodies.earth.y) ** 2);
+                const realDistance = earthDistance * 4800; // 스케일 조정
+                
+                html += `
+                    <div class="planet-info">
+                        <div class="planet-name">${body.name}</div>
+                        <div class="distance-info">
+                            ${key === 'earth' ? '기준점' : `지구로부터: ${realDistance.toLocaleString()}km`}
+                        </div>
+                        <div class="distance-info">
+                            반지름: ${body.realRadius.toLocaleString()}km
+                        </div>
+                    </div>
+                `;
+            });
+            
+            infoDiv.innerHTML = html;
+        }
+
+        function updatePositions() {
+            time += timeSpeed * 0.016; // 60fps 기준
+            
+            // 지구는 중심에 고정
+            celestialBodies.earth.x = 0;
+            celestialBodies.earth.y = 0;
+            
+            // 달의 위치 (지구 주위 공전)
+            celestialBodies.moon.x = Math.cos(time * celestialBodies.moon.orbitSpeed) * celestialBodies.moon.orbitRadius;
+            celestialBodies.moon.y = Math.sin(time * celestialBodies.moon.orbitSpeed) * celestialBodies.moon.orbitRadius;
+            
+            // 화성의 위치 (태양 주위 공전, 여기서는 지구 기준으로 단순화)
+            celestialBodies.mars.x = Math.cos(time * celestialBodies.mars.orbitSpeed) * celestialBodies.mars.orbitRadius;
+            celestialBodies.mars.y = Math.sin(time * celestialBodies.mars.orbitSpeed) * celestialBodies.mars.orbitRadius;
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.save();
+            ctx.translate(camera.x, camera.y);
+            ctx.scale(camera.zoom, camera.zoom);
+            
+            // 궤도 그리기
+            if (showOrbits) {
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = 1 / camera.zoom;
+                
+                // 달 궤도
+                ctx.beginPath();
+                ctx.arc(0, 0, celestialBodies.moon.orbitRadius, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                // 화성 궤도
+                ctx.beginPath();
+                ctx.arc(0, 0, celestialBodies.mars.orbitRadius, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            
+            // 천체 그리기
+            Object.entries(celestialBodies).forEach(([key, body]) => {
+                ctx.fillStyle = body.color;
+                ctx.beginPath();
+                ctx.arc(body.x, body.y, body.radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 그림자 효과
+                const gradient = ctx.createRadialGradient(
+                    body.x - body.radius/3, body.y - body.radius/3, 0,
+                    body.x, body.y, body.radius
+                );
+                gradient.addColorStop(0, body.color);
+                gradient.addColorStop(1, 'rgba(0,0,0,0.3)');
+                ctx.fillStyle = gradient;
+                ctx.fill();
+                
+                // 이름 표시
+                ctx.fillStyle = 'white';
+                ctx.font = `${12 / camera.zoom}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.fillText(body.name, body.x, body.y + body.radius + 15 / camera.zoom);
+            });
+            
+            ctx.restore();
+        }
+
+        function gameLoop() {
+            updatePositions();
+            draw();
+            updatePlanetInfo();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 게임 시작
+        drawStars();
+        gameLoop();
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'98408287c76dde66',t:'MTc1ODY5ODMyOC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
